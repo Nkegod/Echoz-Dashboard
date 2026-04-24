@@ -16,7 +16,11 @@ type InventoryItem = {
   quantity: number | null;
   stock_remaining: number | null;
   location: string | null;
-};
+  added_by?: string | null;
+  profiles?: {
+    full_name: string | null;
+  } | null;
+};``
 
 export default function InventoryPage() {
   const { checking, profile } = useAuthGuard();
@@ -36,14 +40,19 @@ export default function InventoryPage() {
 
     const { data, error } = await supabase
       .from("inventory")
-      .select("*")
+      .select(`
+        *,
+        profiles:added_by (
+          full_name
+        )
+      `)
       .order("item_name", { ascending: true });
 
     if (error) {
       setError(error.message);
       setInventory([]);
     } else {
-      setInventory(data || []);
+      setInventory((data || []) as InventoryItem[]);
     }
 
     setLoading(false);
@@ -77,11 +86,13 @@ export default function InventoryPage() {
       const itemName = item.item_name?.toLowerCase() || "";
       const category = item.category?.toLowerCase() || "";
       const location = item.location?.toLowerCase() || "";
+      const addedBy = item.profiles?.full_name?.toLowerCase() || "";
 
       return (
         itemName.includes(term) ||
         category.includes(term) ||
-        location.includes(term)
+        location.includes(term) ||
+        addedBy.includes(term)
       );
     });
   }, [inventory, searchTerm]);
@@ -211,7 +222,7 @@ export default function InventoryPage() {
           <input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search item, category, location..."
+            placeholder="Search item, category, location, added by..."
             className="w-72 bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-gray-500 outline-none focus:border-white/20"
           />
         </div>
@@ -221,7 +232,7 @@ export default function InventoryPage() {
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search item, category, location..."
+          placeholder="Search item, category, location, added by..."
           className="w-full bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-white/20"
         />
       </div>
@@ -323,6 +334,9 @@ export default function InventoryPage() {
                   Location
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Added By
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -332,7 +346,7 @@ export default function InventoryPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     Loading inventory...
@@ -384,6 +398,11 @@ export default function InventoryPage() {
                         {item.location || "—"}
                       </td>
                       <td className="px-4 py-3">
+                        <span className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-gray-300 whitespace-nowrap">
+                          {item.profiles?.full_name || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
                         {profile?.role === "admin" && (
                           <div className="flex items-center gap-2">
                             <button
@@ -408,7 +427,7 @@ export default function InventoryPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     No matching inventory found.

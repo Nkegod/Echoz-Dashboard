@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import DashboardShell from "@/components/dashboard-shell";
 import { useAuthGuard } from "@/lib/use-auth-guard";
-import LogoutButton from "@/components/logout-button";
 
 export default function AddStockPage() {
   const { checking, profile } = useAuthGuard();
@@ -84,6 +83,11 @@ export default function AddStockPage() {
       return;
     }
 
+    if (!profile?.id) {
+      toast.error("User profile not found. Please login again.");
+      return;
+    }
+
     setSubmitting(true);
 
     const { error } = await supabase.from("inventory").insert([
@@ -95,6 +99,7 @@ export default function AddStockPage() {
         quantity: qty,
         stock_remaining: qty,
         location: location.trim(),
+        added_by: profile.id,
       },
     ]);
 
@@ -118,22 +123,11 @@ export default function AddStockPage() {
 
   return (
     <DashboardShell active="add-stock" pageLabel="Add Stock">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Add Stock</h1>
-          <p className="text-sm text-gray-400">
-            Add new inventory items into your system
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {profile && (
-            <span className="px-3 py-1 rounded-lg bg-white/10 text-xs uppercase tracking-wide text-gray-300 border border-white/10">
-              {profile.role}
-            </span>
-          )}
-          <LogoutButton />
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold">Add Stock</h1>
+        <p className="text-sm text-gray-400">
+          Add new inventory items into your system
+        </p>
       </div>
 
       <form
@@ -141,9 +135,7 @@ export default function AddStockPage() {
         className="bg-white/4 border border-white/10 rounded-2xl p-6 space-y-5 max-w-xl"
       >
         <div>
-          <label className="text-sm text-gray-400 mb-1 block">
-            Item Name
-          </label>
+          <label className="text-sm text-gray-400 mb-1 block">Item Name</label>
           <input
             value={itemName}
             onChange={(e) => setItemName(e.target.value)}
@@ -153,9 +145,7 @@ export default function AddStockPage() {
         </div>
 
         <div>
-          <label className="text-sm text-gray-400 mb-1 block">
-            Category
-          </label>
+          <label className="text-sm text-gray-400 mb-1 block">Category</label>
           <input
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -194,9 +184,7 @@ export default function AddStockPage() {
 
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <label className="text-sm text-gray-400 mb-1 block">
-              Quantity
-            </label>
+            <label className="text-sm text-gray-400 mb-1 block">Quantity</label>
             <input
               type="number"
               value={quantity}
@@ -207,9 +195,7 @@ export default function AddStockPage() {
           </div>
 
           <div>
-            <label className="text-sm text-gray-400 mb-1 block">
-              Location
-            </label>
+            <label className="text-sm text-gray-400 mb-1 block">Location</label>
             <input
               value={location}
               onChange={(e) => setLocation(e.target.value)}
