@@ -17,8 +17,13 @@ type InventoryItem = {
   stock_remaining: number | null;
   location: string | null;
   added_by?: string | null;
+  updated_by?: string | null;
   created_at?: string | null;
+  updated_at?: string | null;
   profiles?: {
+    full_name: string | null;
+  } | null;
+  updated_profiles?: {
     full_name: string | null;
   } | null;
 };
@@ -50,12 +55,17 @@ export default function InventoryPage() {
 
     const { data, error } = await supabase
       .from("inventory")
-      .select(`
+      .select(
+        `
         *,
         profiles:added_by (
           full_name
+        ),
+        updated_profiles:updated_by (
+          full_name
         )
-      `)
+      `,
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -78,7 +88,7 @@ export default function InventoryPage() {
         { event: "*", schema: "public", table: "inventory" },
         async () => {
           await fetchInventory();
-        }
+        },
       )
       .subscribe();
 
@@ -97,14 +107,18 @@ export default function InventoryPage() {
       const category = item.category?.toLowerCase() || "";
       const location = item.location?.toLowerCase() || "";
       const addedBy = item.profiles?.full_name?.toLowerCase() || "";
+      const updatedBy = item.updated_profiles?.full_name?.toLowerCase() || "";
       const dateAdded = formatDateTime(item.created_at).toLowerCase();
+      const lastUpdated = formatDateTime(item.updated_at).toLowerCase();
 
       return (
         itemName.includes(term) ||
         category.includes(term) ||
         location.includes(term) ||
         addedBy.includes(term) ||
-        dateAdded.includes(term)
+        updatedBy.includes(term) ||
+        dateAdded.includes(term) ||
+        lastUpdated.includes(term)
       );
     });
   }, [inventory, searchTerm]);
@@ -113,17 +127,17 @@ export default function InventoryPage() {
 
   const totalStock = inventory.reduce(
     (sum, item) => sum + Number(item.stock_remaining || 0),
-    0
+    0,
   );
 
   const lowStockItems = inventory.filter(
     (item) =>
       Number(item.stock_remaining || 0) > 0 &&
-      Number(item.stock_remaining || 0) <= 5
+      Number(item.stock_remaining || 0) <= 5,
   ).length;
 
   const outOfStockItems = inventory.filter(
-    (item) => Number(item.stock_remaining || 0) === 0
+    (item) => Number(item.stock_remaining || 0) === 0,
   ).length;
 
   function openEditModal(item: InventoryItem) {
@@ -154,6 +168,8 @@ export default function InventoryPage() {
         quantity: updatedItem.quantity,
         stock_remaining: updatedItem.stock_remaining,
         location: updatedItem.location,
+        updated_at: new Date().toISOString(),
+        updated_by: profile?.id,
       })
       .eq("id", updatedItem.id);
 
@@ -352,6 +368,12 @@ export default function InventoryPage() {
                   Date Added
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Edited By
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Last Updated
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -361,7 +383,7 @@ export default function InventoryPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={13}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     Loading inventory...
@@ -421,6 +443,14 @@ export default function InventoryPage() {
                         {formatDateTime(item.created_at)}
                       </td>
                       <td className="px-4 py-3">
+                        <span className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-xs text-gray-300 whitespace-nowrap">
+                          {item.updated_profiles?.full_name || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                        {formatDateTime(item.updated_at)}
+                      </td>
+                      <td className="px-4 py-3">
                         {profile?.role === "admin" && (
                           <div className="flex items-center gap-2">
                             <button
@@ -445,7 +475,7 @@ export default function InventoryPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={11}
+                    colSpan={13}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     No matching inventory found.
