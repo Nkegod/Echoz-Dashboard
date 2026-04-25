@@ -17,10 +17,20 @@ type InventoryItem = {
   stock_remaining: number | null;
   location: string | null;
   added_by?: string | null;
+  created_at?: string | null;
   profiles?: {
     full_name: string | null;
   } | null;
-};``
+};
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
+
+  return new Date(value).toLocaleString("en-NG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 
 export default function InventoryPage() {
   const { checking, profile } = useAuthGuard();
@@ -46,7 +56,7 @@ export default function InventoryPage() {
           full_name
         )
       `)
-      .order("item_name", { ascending: true });
+      .order("created_at", { ascending: false });
 
     if (error) {
       setError(error.message);
@@ -87,12 +97,14 @@ export default function InventoryPage() {
       const category = item.category?.toLowerCase() || "";
       const location = item.location?.toLowerCase() || "";
       const addedBy = item.profiles?.full_name?.toLowerCase() || "";
+      const dateAdded = formatDateTime(item.created_at).toLowerCase();
 
       return (
         itemName.includes(term) ||
         category.includes(term) ||
         location.includes(term) ||
-        addedBy.includes(term)
+        addedBy.includes(term) ||
+        dateAdded.includes(term)
       );
     });
   }, [inventory, searchTerm]);
@@ -222,8 +234,8 @@ export default function InventoryPage() {
           <input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search item, category, location, added by..."
-            className="w-72 bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-gray-500 outline-none focus:border-white/20"
+            placeholder="Search item, category, location, added by, date..."
+            className="w-80 bg-gray-900 border border-white/10 rounded-xl px-4 py-2 text-sm text-white placeholder-gray-500 outline-none focus:border-white/20"
           />
         </div>
       </div>
@@ -232,7 +244,7 @@ export default function InventoryPage() {
         <input
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search item, category, location, added by..."
+          placeholder="Search item, category, location, added by, date..."
           className="w-full bg-gray-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 outline-none focus:border-white/20"
         />
       </div>
@@ -337,6 +349,9 @@ export default function InventoryPage() {
                   Added By
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Date Added
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -346,7 +361,7 @@ export default function InventoryPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     Loading inventory...
@@ -402,6 +417,9 @@ export default function InventoryPage() {
                           {item.profiles?.full_name || "—"}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-gray-400 text-xs whitespace-nowrap">
+                        {formatDateTime(item.created_at)}
+                      </td>
                       <td className="px-4 py-3">
                         {profile?.role === "admin" && (
                           <div className="flex items-center gap-2">
@@ -427,7 +445,7 @@ export default function InventoryPage() {
               ) : (
                 <tr>
                   <td
-                    colSpan={10}
+                    colSpan={11}
                     className="px-4 py-12 text-center text-gray-500 text-sm"
                   >
                     No matching inventory found.

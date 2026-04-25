@@ -18,6 +18,10 @@ export default function DashboardShell({
 }: DashboardShellProps) {
   const { checking, profile } = useAuthGuard();
 
+  const firstName = profile?.full_name
+    ? profile.full_name.trim().split(" ")[0]
+    : "User";
+
   if (checking) {
     return (
       <main className="min-h-screen bg-gray-950 flex items-center justify-center text-gray-400">
@@ -44,9 +48,15 @@ export default function DashboardShell({
 
         <div className="flex items-center gap-3">
           {profile && (
-            <span className="px-3 py-1 rounded-lg bg-white/10 text-xs uppercase tracking-wide text-gray-300 border border-white/10">
-              {profile.role}
-            </span>
+            <div className="hidden sm:flex flex-col items-end leading-tight">
+              <span className="text-sm text-white font-medium">
+                Welcome, {firstName}
+              </span>
+
+              <span className="text-xs text-gray-400 uppercase tracking-wide">
+                {profile.role}
+              </span>
+            </div>
           )}
 
           {pageLabel && (
