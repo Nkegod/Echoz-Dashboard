@@ -167,13 +167,22 @@ export default function LoginPage() {
                       Password
                     </label>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="text-xs text-gray-500 transition hover:text-white"
-                    >
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <a
+                        href="/forgot-password"
+                        className="text-xs text-gray-500 hover:text-white transition"
+                      >
+                        Forgot password?
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="text-xs text-gray-500 transition hover:text-white"
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
                   </div>
 
                   <input
