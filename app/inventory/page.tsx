@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { supabase } from "@/lib/supabase";
 import DashboardShell from "@/components/dashboard-shell";
 import InventoryItemModal from "@/components/inventory-item-modal";
@@ -35,6 +37,11 @@ function formatDateTime(value?: string | null) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function escapeCSV(value: string | number | null | undefined) {
+  const stringValue = String(value ?? "");
+  return `"${stringValue.replace(/"/g, '""')}"`;
 }
 
 export default function InventoryPage() {
@@ -139,6 +146,131 @@ export default function InventoryPage() {
   const outOfStockItems = inventory.filter(
     (item) => Number(item.stock_remaining || 0) === 0,
   ).length;
+
+  function exportToCSV() {
+    const headers = [
+      "Item Name",
+      "Category",
+      "Cost Price",
+      "Selling Price",
+      "Quantity",
+      "Stock Remaining",
+      "Status",
+      "Location",
+      "Added By",
+      "Date Added",
+      "Edited By",
+      "Last Updated",
+    ];
+
+    const rows = filteredInventory.map((item) => {
+      const remaining = Number(item.stock_remaining || 0);
+      const status =
+        remaining > 5
+          ? "In Stock"
+          : remaining > 0
+            ? "Low Stock"
+            : "Out of Stock";
+
+      return [
+        item.item_name,
+        item.category || "",
+        item.cost_price || 0,
+        item.selling_price || 0,
+        item.quantity || 0,
+        item.stock_remaining || 0,
+        status,
+        item.location || "",
+        item.profiles?.full_name || "",
+        formatDateTime(item.created_at),
+        item.updated_profiles?.full_name || "",
+        formatDateTime(item.updated_at),
+      ];
+    });
+
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((value) => escapeCSV(value)).join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "inventory-report.csv";
+    link.click();
+
+    URL.revokeObjectURL(url);
+  }
+
+  function exportToPDF() {
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "a4",
+    });
+
+    doc.setFontSize(16);
+    doc.text("ECHOZ MULTI VENTURES LTD", 40, 40);
+
+    doc.setFontSize(11);
+    doc.text("Inventory Report", 40, 60);
+    doc.text(`Generated: ${formatDateTime(new Date().toISOString())}`, 40, 78);
+
+    const rows = filteredInventory.map((item) => {
+      const remaining = Number(item.stock_remaining || 0);
+      const status =
+        remaining > 5
+          ? "In Stock"
+          : remaining > 0
+            ? "Low Stock"
+            : "Out of Stock";
+
+      return [
+        item.item_name,
+        item.category || "—",
+        `N${Number(item.cost_price || 0).toLocaleString()}`,
+        `N${Number(item.selling_price || 0).toLocaleString()}`,
+        String(item.quantity ?? "—"),
+        String(item.stock_remaining ?? "—"),
+        status,
+        item.location || "—",
+        item.profiles?.full_name || "—",
+        formatDateTime(item.created_at),
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 100,
+      head: [
+        [
+          "Item",
+          "Category",
+          "Cost",
+          "Selling",
+          "Qty",
+          "Stock",
+          "Status",
+          "Location",
+          "Added By",
+          "Date Added",
+        ],
+      ],
+      body: rows,
+      styles: {
+        fontSize: 8,
+        cellPadding: 4,
+      },
+      headStyles: {
+        fillColor: [31, 41, 55],
+      },
+    });
+
+    doc.save("inventory-report.pdf");
+  }
 
   function openEditModal(item: InventoryItem) {
     setSelectedItem(item);
@@ -318,11 +450,25 @@ export default function InventoryPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             <span className="text-xs text-gray-500">
               {filteredInventory.length} item
               {filteredInventory.length !== 1 ? "s" : ""}
             </span>
+
+            <button
+              onClick={exportToCSV}
+              className="px-3 py-2 rounded-xl text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+            >
+              Export Excel
+            </button>
+
+            <button
+              onClick={exportToPDF}
+              className="px-3 py-2 rounded-xl text-xs font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors"
+            >
+              Export PDF
+            </button>
 
             <button
               onClick={fetchInventory}
