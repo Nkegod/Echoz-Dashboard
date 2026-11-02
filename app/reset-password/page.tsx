@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 
@@ -10,11 +10,108 @@ export default function ResetPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [checkingRecovery, setCheckingRecovery] = useState(true);
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function establishRecoverySession() {
+      try {
+        // First check whether Supabase has already established the session
+        // from the recovery link.
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) throw sessionError;
+
+        if (session) {
+          if (mounted) setRecoveryReady(true);
+          return;
+        }
+
+        // Support recovery links that return tokens in the URL fragment.
+        const hashParams = new URLSearchParams(window.location.hash.slice(1));
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) throw error;
+          if (!data.session) {
+            throw new Error("The recovery session could not be established. Please request a new password reset link.");
+          }
+
+          // Remove sensitive tokens from the address bar after the session is saved.
+          window.history.replaceState(
+            null,
+            document.title,
+            window.location.pathname + window.location.search
+          );
+
+          if (mounted) setRecoveryReady(true);
+          return;
+        }
+
+        // Also support PKCE recovery links that return a one-time code.
+        const code = new URLSearchParams(window.location.search).get("code");
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) throw error;
+          if (!data.session) {
+            throw new Error("The recovery session could not be established. Please request a new password reset link.");
+          }
+
+          window.history.replaceState(
+            null,
+            document.title,
+            window.location.pathname
+          );
+
+          if (mounted) setRecoveryReady(true);
+          return;
+        }
+
+        throw new Error("Your password recovery session is missing or has expired. Please request a new password reset link.");
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "Unable to verify your password recovery link.";
+
+        if (mounted) {
+          setRecoveryError(message);
+          setRecoveryReady(false);
+        }
+      } finally {
+        if (mounted) setCheckingRecovery(false);
+      }
+    }
+
+    establishRecoverySession();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function handleUpdatePassword(e: React.FormEvent) {
     e.preventDefault();
 
     if (saving) return;
+
+    if (!recoveryReady) {
+      toast.error("Your recovery session is not valid. Please request a new reset link.");
+      return;
+    }
 
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters.");
@@ -28,18 +125,34 @@ export default function ResetPasswordPage() {
 
     setSaving(true);
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    });
+    try {
+      // Confirm that the recovery session is still active before updating.
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-    if (error) {
-      toast.error(error.message);
+      if (sessionError) throw sessionError;
+      if (!session) {
+        throw new Error("Your recovery session has expired. Please request a new password reset link.");
+      }
+
+      const { error } = await supabase.auth.updateUser({ password });
+
+      if (error) throw error;
+
+      toast.success("Password updated successfully.");
+      window.location.href = "/login";
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to update password.";
+
+      toast.error(message);
+      setRecoveryError(message);
+      setRecoveryReady(false);
+    } finally {
       setSaving(false);
-      return;
     }
-
-    toast.success("Password updated successfully.");
-    window.location.href = "/login";
   }
 
   return (
@@ -74,6 +187,26 @@ export default function ResetPasswordPage() {
             </p>
           </div>
 
+          {checkingRecovery ? (
+            <p className="rounded-xl border border-white/10 bg-gray-900 px-4 py-3 text-sm text-gray-400">
+              Verifying your password recovery link...
+            </p>
+          ) : recoveryReady ? (
+            <p className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-300">
+              Recovery link verified. You can now choose a new password.
+            </p>
+          ) : (
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+              {recoveryError || "Your recovery session is missing or has expired."}
+              <a
+                href="/forget-password"
+                className="mt-2 block font-medium text-white underline underline-offset-4"
+              >
+                Request a new password reset link
+              </a>
+            </div>
+          )}
+
           <div>
             <div className="mb-2 flex items-center justify-between">
               <label className="block text-sm font-medium text-gray-300">
@@ -95,7 +228,8 @@ export default function ResetPasswordPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full rounded-xl border border-white/10 bg-gray-900 px-4 py-3 text-sm text-white placeholder:text-gray-500 outline-none transition focus:border-white/20"
+              disabled={!recoveryReady || checkingRecovery || saving}
+              className="w-full rounded-xl border border-white/10 bg-gray-900 px-4 py-3 text-sm text-white placeholder:text-gray-500 outline-none transition focus:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
@@ -109,13 +243,14 @@ export default function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
-              className="w-full rounded-xl border border-white/10 bg-gray-900 px-4 py-3 text-sm text-white placeholder:text-gray-500 outline-none transition focus:border-white/20"
+              disabled={!recoveryReady || checkingRecovery || saving}
+              className="w-full rounded-xl border border-white/10 bg-gray-900 px-4 py-3 text-sm text-white placeholder:text-gray-500 outline-none transition focus:border-white/20 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
 
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || checkingRecovery || !recoveryReady}
             className="w-full rounded-xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? "Updating..." : "Update Password"}
